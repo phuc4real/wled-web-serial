@@ -1,11 +1,18 @@
 import { EFFECTS, PALETTES } from './wled-data.js';
 import { t, applyStatic, toggleLang, getLang } from './i18n.js';
 
-const USB_FILTERS = [{ usbVendorId: 0x1a86, usbProductId: 0x7523 }]; // CH340 trên D1 mini
+// Common USB-serial bridges on WLED boards. The port picker lists only these.
+const USB_FILTERS = [
+  { usbVendorId: 0x1a86 },  // WCH: CH340, CH341, CH9102
+  { usbVendorId: 0x10c4 },  // Silicon Labs: CP210x
+  { usbVendorId: 0x0403 },  // FTDI
+  { usbVendorId: 0x303a },  // Espressif: ESP32-S2/S3/C3/C6 native USB
+  { usbVendorId: 0x067b },  // Prolific: PL2303
+];
 const BAUD = 115200;
-const LIVE_MS = 120;      // chu kỳ đọc màu từng bóng
-const STATE_MS = 4000;    // chu kỳ đồng bộ trạng thái
-const SEND_MS = 70;       // giãn cách gửi khi kéo thanh trượt
+const LIVE_MS = 120;      // per-LED color poll interval
+const STATE_MS = 4000;    // full state sync interval
+const SEND_MS = 70;       // minimum gap between commands while dragging a slider
 const PRESET_SLOTS = 8;
 const SWATCHES = ['#ff0000', '#ff6400', '#ffc800', '#d8ff75', '#00ff00', '#00ffff',
   '#0000ff', '#8c00ff', '#ff3c8c', '#ffaa50', '#ffffff'];
@@ -24,7 +31,7 @@ const ui = {
 
 const app = {
   state: null, info: null, leds: [], ledCount: 63,
-  busy: new Set(),         // control đang bị người dùng thao tác, không ghi đè từ đèn
+  busy: new Set(),         // controls the user is dragging; don't overwrite them from device state
   status: { key: 'statusIdle', vars: {}, state: '' },
 };
 
@@ -39,10 +46,11 @@ class WledSerial {
 
   async open(port) {
     await port.open({ baudRate: BAUD });
-    // KHÔNG gọi setSignals. Trên D1 mini, DTR/RTS nối vào mạch auto-reset:
-    //   RTS bật + DTR tắt  -> kéo RST  (reset chip)
-    //   DTR bật + RTS tắt  -> kéo GPIO0 (WLED hiểu là bấm nút -> bật/tắt đèn)
-    // Chrome mở cổng với cả hai cùng bật (an toàn); đổi từng tín hiệu sẽ lọt qua một trong hai trạng thái trên.
+    // Never call setSignals(). On ESP boards with an auto-reset circuit (D1 mini, NodeMCU...):
+    //   RTS on + DTR off -> pulls EN/RST low (chip resets)
+    //   DTR on + RTS off -> pulls GPIO0 low (WLED reads it as a button press and toggles power)
+    // Chrome opens the port with both asserted, which is safe. Changing them one at a time
+    // passes through one of the states above.
     this.port = port;
     this.writer = port.writable.getWriter();
     this.readLoop();
@@ -74,7 +82,7 @@ class WledSerial {
         if (!this.port) break;
       }
     } catch (err) {
-      console.warn('Lỗi đọc cổng:', err);
+      console.warn('Serial read error:', err);
     }
     if (this.port) this.close(true);
   }
@@ -83,7 +91,7 @@ class WledSerial {
     if (!this.writer) return Promise.resolve();
     this.chain = this.chain
       .then(() => this.writer.write(this.enc.encode(text)))
-      .catch((err) => console.warn('Lỗi ghi cổng:', err));
+      .catch((err) => console.warn('Serial write error:', err));
     return this.chain;
   }
   sendJson(obj) { return this.write(JSON.stringify(obj) + '\n'); }
@@ -92,10 +100,10 @@ class WledSerial {
     const port = this.port;
     if (!port) return;
     this.port = null;
-    try { await this.reader?.cancel(); } catch { /* bỏ qua */ }
-    try { await this.chain; this.writer?.releaseLock(); } catch { /* bỏ qua */ }
+    try { await this.reader?.cancel(); } catch { /* ignore */ }
+    try { await this.chain; this.writer?.releaseLock(); } catch { /* ignore */ }
     this.writer = null;
-    try { await port.close(); } catch { /* bỏ qua */ }
+    try { await port.close(); } catch { /* ignore */ }
     this.onClose(lost);
   }
 }
@@ -106,12 +114,12 @@ let liveTimer = 0, stateTimer = 0, awaitingLeds = 0, refreshTimer = 0;
 function handleLine(line) {
   if (line[0] === '[') {
     awaitingLeds = 0;
-    try { app.leds = JSON.parse(line); renderStrip(); } catch { /* khung không trọn, bỏ qua */ }
+    try { app.leds = JSON.parse(line); renderStrip(); } catch { /* partial frame, ignore */ }
   } else if (line[0] === '{') {
     try {
       const d = JSON.parse(line);
       if (d.state) { app.state = d.state; app.info = d.info || app.info; renderState(); }
-    } catch { /* bỏ qua */ }
+    } catch { /* ignore */ }
   }
 }
 
@@ -133,7 +141,7 @@ async function connect() {
     port = granted.find(matchesFilter) || await navigator.serial.requestPort({ filters: USB_FILTERS });
   } catch (err) {
     if (err.name !== 'NotFoundError') setStatus('statusChooserError', 'error', { msg: err.message });
-    return; // NotFoundError: người dùng đóng hộp chọn
+    return; // NotFoundError: the user closed the picker
   }
   setStatus('statusConnecting');
   try {
@@ -153,7 +161,7 @@ async function connect() {
 
 function matchesFilter(p) {
   const i = p.getInfo();
-  return USB_FILTERS.some((f) => f.usbVendorId === i.usbVendorId && f.usbProductId === i.usbProductId);
+  return USB_FILTERS.some((f) => f.usbVendorId === i.usbVendorId && (f.usbProductId ?? i.usbProductId) === i.usbProductId);
 }
 
 function requestState() { serial.write('{"v":true}\n'); }
@@ -168,7 +176,7 @@ function refreshSoon() {
   refreshTimer = setTimeout(requestState, 350);
 }
 
-// Gửi lệnh, gộp các lần gửi liên tiếp khi kéo thanh trượt.
+// Send a command. With a key, rapid updates (slider drags) are coalesced.
 const pending = new Map();
 function send(obj, key = null) {
   if (!serial.connected) return;
@@ -194,7 +202,7 @@ function setStatus(key, state = '', vars = {}) {
   ui.connStatus.dataset.state = state;
 }
 
-// Các chuỗi phụ thuộc trạng thái + ngôn ngữ.
+// Strings that depend on connection state and language.
 function renderDynamic() {
   const { key, state, vars } = app.status;
   ui.connStatus.textContent = t(key, vars);

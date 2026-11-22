@@ -1,64 +1,92 @@
-# Desk LED / Đèn LED bàn
+# WLED Web Serial
 
-A static web page that controls a [WLED](https://kno.wled.ge/) light strip over USB using the browser's Web Serial API. No app, no server, no Wi-Fi needed.
+Control a [WLED](https://kno.wled.ge/) device over USB, right in your browser. The page uses the Web Serial API, so it needs no app, no server and no Wi-Fi connection to the device.
 
-Trang web tĩnh điều khiển dải LED chạy WLED qua cổng USB bằng Web Serial của trình duyệt. Không cần cài app, không cần server, không cần Wi-Fi.
+**Open it:** https://phuc4real.github.io/wled-web-serial/
 
-## Features / Tính năng
+*Tiếng Việt bên dưới.*
 
-- Live view of every LED on the strip, read from the device about 8 times per second.
-  Xem trực tiếp màu từng bóng LED, đọc từ đèn khoảng 8 lần mỗi giây.
-- Power, brightness, color, 145 effects, 72 palettes, speed and intensity.
-  Bật/tắt, độ sáng, màu, 145 hiệu ứng, 72 bảng màu, tốc độ và cường độ.
-- Load and save presets.
-  Gọi và lưu preset.
-- English and Vietnamese UI. The page follows the browser language, and the header switch changes it.
-  Giao diện tiếng Anh và tiếng Việt. Trang theo ngôn ngữ trình duyệt, đổi được bằng nút ở đầu trang.
+## Features
 
-## Requirements / Yêu cầu
+- Live preview of every LED, read from the device several times per second
+- Power, brightness, color, effects, palettes, speed and intensity
+- Apply and save presets
+- English and Vietnamese interface
 
-- Chrome or Edge on a desktop computer. Firefox, Safari and mobile browsers don't support Web Serial.
-  Chrome hoặc Edge trên máy tính. Firefox, Safari và trình duyệt điện thoại không hỗ trợ Web Serial.
-- The page must be served over HTTPS (GitHub Pages does this) or from `localhost`.
-  Trang phải chạy qua HTTPS (GitHub Pages đã có sẵn) hoặc từ `localhost`.
-- WLED firmware with serial at 115200 baud. Tested with WLED 16.0.1 on an ESP8266 LOLIN D1 mini (CH340).
-  Firmware WLED, serial ở baud 115200. Đã thử với WLED 16.0.1 trên ESP8266 LOLIN D1 mini (CH340).
+## Requirements
 
-## Use / Sử dụng
+- Chrome or Edge 89 or later on a desktop computer. Firefox, Safari and mobile browsers don't support Web Serial.
+- A WLED device connected over USB, with serial at the default 115200 baud.
+- A common USB-serial chip: CH340/CH9102, CP210x, FTDI, PL2303, or the native USB on ESP32-S2/S3/C3/C6.
 
-1. Plug the light into USB. / Cắm đèn vào cổng USB.
-2. Select **Connect light**, pick the CH340 port. Chrome remembers the permission.
-   Bấm **Kết nối đèn**, chọn cổng CH340. Chrome sẽ nhớ quyền này.
+Tested with WLED 16.0.1 on an ESP8266 (LOLIN D1 mini).
 
-Only one program can use the port at a time. Close `led.py`, the Arduino serial monitor, and similar tools first.
-Mỗi lúc chỉ một chương trình dùng được cổng. Hãy đóng `led.py`, Serial Monitor của Arduino và các công cụ tương tự trước.
+## Usage
 
-## Run locally / Chạy trên máy
+1. Connect the device to your computer over USB.
+2. Select **Connect device** and choose its port. The browser remembers this permission for next time.
+
+Only one app can use a serial port at a time. If connecting fails, close any serial monitor or other tool that has the port open.
+
+## How it works
+
+The page talks to WLED's built-in serial interface:
+
+| Sent | Purpose |
+|---|---|
+| `{"v":true}` | Read the full state and device info (JSON) |
+| `l` | Read the current color of every LED (JSON array) |
+| `{"on":true,"bri":128,...}` | Change state, same format as WLED's JSON API |
+
+### DTR/RTS and auto-reset boards
+
+Many ESP boards (D1 mini, NodeMCU and similar) wire DTR and RTS to an auto-reset circuit. Changing these signals one at a time can:
+- reset the chip (RTS on, DTR off), or
+- pull GPIO0 low (DTR on, RTS off). WLED reads this as a button press and toggles the light.
+
+The page keeps the signals exactly as the browser opens the port and never calls `setSignals()`.
+
+## Run locally
+
+Web Serial works on `localhost` without HTTPS. There is no build step:
 
 ```
-python -m http.server 8765
+python -m http.server 8000
 ```
 
-Then open http://localhost:8765. There is no build step.
-Sau đó mở http://localhost:8765. Không cần bước build.
-
-## Note on DTR/RTS
-
-On boards with an ESP auto-reset circuit (D1 mini, NodeMCU), changing DTR/RTS one signal at a time either resets the chip (RTS on, DTR off) or pulls GPIO0 low (DTR on, RTS off). WLED treats GPIO0 as its button, so that toggles the light. The page leaves both signals as Chrome opens them and never calls `setSignals()`.
-
-Trên board có mạch auto-reset (D1 mini, NodeMCU), đổi DTR/RTS lần lượt từng tín hiệu sẽ gây ra một trong hai lỗi:
-- RTS bật, DTR tắt: reset chip.
-- DTR bật, RTS tắt: kéo GPIO0 xuống. WLED dùng GPIO0 làm nút bấm, nên đèn bị bật/tắt.
-
-Vì vậy trang giữ nguyên hai tín hiệu như lúc Chrome mở cổng và không gọi `setSignals()`.
+Then open http://localhost:8000.
 
 ## Files
 
-| File | |
+| File | Contents |
 |---|---|
-| `index.html`, `style.css` | Page and styles |
-| `app.js` | Web Serial connection, WLED JSON API, UI |
-| `i18n.js` | English / Vietnamese strings |
-| `wled-data.js` | Effect and palette names from WLED v16.0.1 source (ESP8266 build, 1D effects) |
+| `index.html`, `style.css` | Page structure and styles |
+| `app.js` | Serial connection, WLED commands, interface logic |
+| `i18n.js` | English and Vietnamese strings |
+| `wled-data.js` | Effect and palette names from the WLED 16 source |
 
-Effect and palette names come from [WLED](https://github.com/wled/WLED) (EUPL-1.2).
+## Credits
+
+Effect and palette names come from [WLED](https://github.com/wled/WLED) (EUPL-1.2). This is an independent project and is not affiliated with the WLED team.
+
+---
+
+## Tiếng Việt
+
+Điều khiển thiết bị [WLED](https://kno.wled.ge/) qua cổng USB ngay trên trình duyệt. Trang dùng Web Serial API nên không cần cài ứng dụng, không cần server và không cần kết nối Wi-Fi tới thiết bị.
+
+**Tính năng**
+- Xem trước trực tiếp màu từng LED, đọc từ thiết bị nhiều lần mỗi giây.
+- Bật/tắt, độ sáng, màu, hiệu ứng, bảng màu, tốc độ và cường độ.
+- Áp dụng và lưu preset.
+- Giao diện tiếng Anh và tiếng Việt.
+
+**Yêu cầu**
+- Chrome hoặc Edge phiên bản 89 trở lên trên máy tính. Firefox, Safari và trình duyệt di động không hỗ trợ Web Serial.
+- Thiết bị WLED cắm qua USB, serial ở baud mặc định 115200.
+
+**Sử dụng**
+1. Cắm thiết bị vào máy tính qua USB.
+2. Bấm **Kết nối thiết bị** và chọn cổng. Trình duyệt sẽ nhớ quyền này cho các lần sau.
+
+Mỗi cổng serial chỉ một ứng dụng dùng được tại một thời điểm. Nếu không kết nối được, hãy đóng Serial Monitor hoặc công cụ khác đang mở cổng.

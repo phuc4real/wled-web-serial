@@ -41,7 +41,7 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Ánh đèn hắt lên tường: màu trung bình của dải LED */
+/* Ambient wash: the average color of the strip, like light on the wall behind it */
 .wall {
   position: fixed;
   inset: 0;
@@ -87,7 +87,7 @@ h1 {
 .conn-status[data-state="error"] { color: #c0392b; }
 @media (prefers-color-scheme: dark) { .conn-status[data-state="error"] { color: #ff8a7a; } }
 
-/* ---------- Dải LED ---------- */
+/* ---------- LED strip ---------- */
 .strip-wrap { padding-block: 28px 8px; }
 .strip {
   display: grid;
@@ -111,7 +111,7 @@ h1 {
 @media (max-width: 720px) {
   .strip { grid-template-columns: repeat(21, 1fr); border-radius: 18px; row-gap: 6px; }
 }
-.strip-caption { margin: 12px 0 0; color: var(--ink-2); font-size: .9375rem; }
+.strip-caption { margin: 12px 0 0; color: var(--ink); font-size: .9375rem; }
 
 .notice {
   margin: 16px 0 0;
@@ -121,7 +121,7 @@ h1 {
   max-width: 68ch;
 }
 
-/* ---------- Điều khiển ---------- */
+/* ---------- Controls ---------- */
 .controls { border: 0; margin: 0; padding: 0; min-width: 0; }
 .controls:disabled { opacity: .5; }
 
