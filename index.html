@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Đèn LED bàn</title>
+  <meta name="description" content="Điều khiển dải LED WLED qua cổng USB, ngay trong trình duyệt.">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='12' width='28' height='8' rx='4' fill='%232B2F36'/%3E%3Ccircle cx='8' cy='16' r='2.5' fill='%23ff5a5a'/%3E%3Ccircle cx='16' cy='16' r='2.5' fill='%23ffd34d'/%3E%3Ccircle cx='24' cy='16' r='2.5' fill='%2355b6ff'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;700&display=swap&subset=vietnamese" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <div class="wall" aria-hidden="true"></div>
+
+  <header class="top">
+    <h1 data-i18n="title">Đèn LED bàn</h1>
+    <div class="conn">
+      <span id="connStatus" class="conn-status" role="status">Chưa kết nối</span>
+      <button id="connectBtn" class="btn btn-primary" type="button">Kết nối đèn</button>
+      <button id="langBtn" class="btn btn-lang" type="button" lang="en" data-i18n="switchTo" data-i18n-attr="aria-label:switchLabel">English</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="strip-wrap" aria-labelledby="stripCaption">
+      <div id="strip" class="strip" role="img" aria-label="Dải LED đang tắt"></div>
+      <p id="stripCaption" class="strip-caption">Cắm đèn vào cổng USB rồi bấm Kết nối đèn.</p>
+    </section>
+
+    <p id="unsupported" class="notice" data-i18n="unsupported" hidden></p>
+
+    <fieldset id="controls" class="controls" disabled>
+      <legend class="sr-only" data-i18n="controls">Điều khiển đèn</legend>
+
+      <div class="row-power">
+        <button id="powerBtn" class="btn btn-power" type="button" aria-pressed="false">Bật đèn</button>
+        <label class="slider" for="bri">
+          <span class="slider-label"><span data-i18n="brightness">Độ sáng</span> <output id="briOut" for="bri">50%</output></span>
+          <input id="bri" type="range" min="1" max="255" value="128">
+        </label>
+      </div>
+
+      <div class="panels">
+        <section class="panel" aria-labelledby="hColor">
+          <h2 id="hColor" data-i18n="color">Màu</h2>
+          <div class="color-row">
+            <input id="colorPick" type="color" value="#d8ff75" data-i18n-attr="aria-label:pickColor">
+            <label class="hex">
+              <span class="sr-only" data-i18n="hexLabel">Mã màu hex</span>
+              <input id="colorHex" type="text" maxlength="7" spellcheck="false" value="#d8ff75" aria-describedby="hexHint">
+            </label>
+            <span id="hexHint" class="hint" data-i18n="hexHint">Dạng #rrggbb</span>
+          </div>
+          <div id="swatches" class="swatches" role="group" data-i18n-attr="aria-label:quickColors"></div>
+
+          <label class="field" for="pal">
+            <span data-i18n="palette">Bảng màu cho hiệu ứng</span>
+            <select id="pal"></select>
+          </label>
+        </section>
+
+        <section class="panel" aria-labelledby="hFx">
+          <h2 id="hFx" data-i18n="effects">Hiệu ứng</h2>
+          <label class="field" for="fxSearch">
+            <span class="sr-only" data-i18n="fxSearch">Tìm hiệu ứng</span>
+            <input id="fxSearch" type="search" data-i18n-attr="placeholder:fxPlaceholder">
+          </label>
+          <ul id="fxList" class="fx-list" data-i18n-attr="aria-label:fxList"></ul>
+          <p id="fxEmpty" class="hint" data-i18n="fxEmpty" hidden></p>
+          <label class="slider" for="sx">
+            <span class="slider-label"><span data-i18n="speed">Tốc độ</span> <output id="sxOut" for="sx">128</output></span>
+            <input id="sx" type="range" min="0" max="255" value="128">
+          </label>
+          <label class="slider" for="ix">
+            <span class="slider-label"><span data-i18n="intensity">Cường độ</span> <output id="ixOut" for="ix">128</output></span>
+            <input id="ix" type="range" min="0" max="255" value="128">
+          </label>
+        </section>
+      </div>
+
+      <section class="presets" aria-labelledby="hPreset">
+        <h2 id="hPreset" data-i18n="presets">Preset</h2>
+        <div id="presetBtns" class="preset-btns" role="group" data-i18n-attr="aria-label:presetGroup"></div>
+        <form id="saveForm" class="save-form">
+          <label class="field" for="saveSlot">
+            <span data-i18n="saveInto">Lưu trạng thái hiện tại vào</span>
+            <select id="saveSlot"></select>
+          </label>
+          <label class="field" for="saveName">
+            <span data-i18n="name">Tên</span>
+            <input id="saveName" type="text" maxlength="32" data-i18n-attr="placeholder:namePlaceholder">
+          </label>
+          <button class="btn" type="submit" data-i18n="save">Lưu preset</button>
+        </form>
+      </section>
+    </fieldset>
+  </main>
+
+  <footer class="foot">
+    <p data-i18n-html="footer"></p>
+    <p id="devInfo" class="dev-info"></p>
+  </footer>
+</body>
+</html>
